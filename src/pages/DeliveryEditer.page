@@ -1,0 +1,124 @@
+<apex:page standardController="Opportunity" extensions="DeliveryEditerController" lightningStylesheets="true">
+    
+    <apex:form >
+        
+        <script>
+        <!-- Press the Enter key to execute the search. -->
+        function EnterSearch(e){
+            if(e.keyCode==13){
+                <!-- Call ActionFunction. -->
+                doEnterSearch();
+                return false;
+            }
+        }
+        <!-- Do not focus when Visualforce initial display. -->
+        beenFocused = true;
+        </script>
+        
+        <apex:pageMessages id="messages"/>
+        
+        <apex:sectionHeader title="Delivery Editer" subtitle="{!Opportunity.Name}"/>
+        
+        <apex:pageBlock id="pubinfo" title="Delivery Information" mode="detail">
+            
+            <apex:pageBlockButtons >
+                <apex:commandButton id="cancelButton" value="Cancel" action="{!cancel}" />
+                <apex:commandButton id="saveButton" value="Save" action="{!saveButton}" />
+                <apex:commandButton id="submitButton" value="Submit" action="{!submitButton}" />
+            </apex:pageBlockButtons>
+            
+            <apex:pageBlockSection columns="3">
+                <apex:inputField value="{!Opportunity.AccountId}" rendered="{!isAccCanChange}">
+                    <apex:actionSupport event="onchange" action="{!initAccInfo}" reRender="pubinfo,messages"/>
+                </apex:inputField>
+                <apex:outputField value="{!Opportunity.AccountId}" rendered="{!NOT(isAccCanChange)}"/>
+                <apex:outputText value="{!$ObjectType.Account.Fields.ShippingAddress.Label}" rendered="{!isAccAddressExist}"/>
+            </apex:pageBlockSection>
+            
+            <apex:pageBlockSection columns="3">
+                <apex:inputField value="{!Opportunity.CloseDate}">
+                    <!-- re-rendering error messages when invalid dates are fixed. -->
+                    <apex:actionSupport event="onchange" action="{!initAccInfo}" reRender="pubinfo,messages"/>
+                </apex:inputField>
+                <apex:outputText value="{!currentAccount.ShippingCountry} {!currentAccount.ShippingState} {!currentAccount.ShippingCity} {!currentAccount.ShippingStreet} {!currentAccount.ShippingPostalCode}" rendered="{!isAccAddressExist}"/>
+                <!-- cannot be used <Apex: map> in Developer Edition.
+                <apex:map width="220px" height="90px" zoomLevel="15" center="{!currentAccount.ShippingPostalCode},{!currentAccount.ShippingStreet},{!currentAccount.ShippingCity},{!currentAccount.ShippingState},{!currentAccount.ShippingCountry}" rendered="{!isAccAddressExist}">
+                    <apex:mapMarker position="{!currentAccount.ShippingPostalCode},{!currentAccount.ShippingStreet},{!currentAccount.ShippingCity},{!currentAccount.ShippingState},{!currentAccount.ShippingCountry}"/>
+                </apex:map>
+                -->
+            </apex:pageBlockSection>
+            
+            <apex:tabPanel switchType="ajax">
+                
+                <!-- re-rendering error messages for invalid dates or invalid quantities. -->
+                <apex:tab label="Pickup" reRender="messages">
+                    <apex:pageBlock id="pickinfo" title="Beverage Picked-Up" mode="detail">
+                        <!-- If there are many records, scroll. -->
+                        <div style="height:256px; overflow-y:Auto;">
+                            <apex:pageBlockTable value="{!editPikupOppLineItemList}" var="epolil">
+                                <apex:column ><apex:facet name="header">{!$ObjectType.OpportunityLineItem.Fields.Quantity.Label}</apex:facet>
+                                    <apex:inputField value="{!epolil.oppli.Quantity}" />
+                                </apex:column>
+                                <apex:column value="{!epolil.name}"><apex:facet name="header">{!$ObjectType.Product2.Fields.Name.Label}</apex:facet></apex:column>
+                                <apex:column value="{!epolil.pbe.UnitPrice}"/>
+                                <apex:column value="{!epolil.descript}"><apex:facet name="header">{!$ObjectType.Product2.Fields.Description.Label}</apex:facet></apex:column>
+                            </apex:pageBlockTable>
+                        </div>
+                    </apex:pageBlock>
+                </apex:tab>
+                
+                <!-- re-rendering error messages for invalid dates or invalid quantities. -->
+                <apex:tab label="Delivery" reRender="messages">
+                    <apex:pageBlock id="delivinfo" title="Beverage Delivered" mode="detail">
+                        <apex:pageBlockButtons location="Top" rendered="{!NOT(dispSearch)}">
+                            <apex:commandButton value="Search for Beverages" action="{!searchBeveragesButton}" reRender="delivinfo,messages" />
+                        </apex:pageBlockButtons>
+                        <apex:pageBlock mode="maindetail" rendered="{!NOT(dispSearch)}">
+                            <!-- If there are many records, scroll. -->
+                            <div style="height:192px; overflow-y:Auto;">
+                                <apex:pageBlockTable value="{!editDeliveryOppLineItemList}" var="edolil">
+                                    <apex:column ><apex:facet name="header">Action</apex:facet>
+                                        <apex:commandButton value="Delete" action="{!deleteButton}" reRender="delivinfo,messages">
+                                            <apex:param name="deletePricebookEntryAddedTime" value="{!edolil.addedtime}" />
+                                            <apex:param name="deleteOpportunityLineItemId" value="{!edolil.oppli.Id}" />
+                                        </apex:commandButton>
+                                    </apex:column>
+                                    <apex:column ><apex:facet name="header">{!$ObjectType.OpportunityLineItem.Fields.Quantity.Label}</apex:facet>
+                                        <apex:inputField value="{!edolil.oppli.Quantity}" />
+                                    </apex:column>
+                                    <apex:column value="{!edolil.name}" ><apex:facet name="header">{!$ObjectType.Product2.Fields.Name.Label}</apex:facet></apex:column>
+                                    <apex:column value="{!edolil.pbe.UnitPrice}" />
+                                    <apex:column value="{!edolil.descript}" ><apex:facet name="header">{!$ObjectType.Product2.Fields.Description.Label}</apex:facet></apex:column>
+                                </apex:pageBlockTable>
+                            </div>
+                        </apex:pageBlock>
+                        <apex:pageBlockSection rendered="{!dispSearch}">
+                            <apex:outputText value="Type part of Beverages name or description and press <Enter>:" />
+                            <apex:inputText id="searchstring" value="{!SearchString}" onkeydown="return EnterSearch(event);"/>
+                            <apex:actionFunction name="doEnterSearch" action="{!getDeliveryBeverages}" reRender="searchinfo,messages" />
+                        </apex:pageBlockSection>
+                        <apex:pageBlock id="searchinfo" mode="maindetail" rendered="{!dispSearch}">
+                            <!-- If there are many records, scroll. -->
+                            <div style="height:192px; overflow-y:Auto;">
+                                <apex:pageBlockTable value="{!searchDeliveryBeverageList}" var="sdbl">
+                                    <apex:column >
+                                        <apex:commandButton action="{!addToDeliveryButton}" value="Add to Delivery" reRender="delivinfo,messages" >
+                                            <apex:param name="addPricebookEntryId" value="{!sdbl.Id}" />
+                                        </apex:commandButton>
+                                    </apex:column>
+                                    <apex:column value="{!sdbl.Product2.Name}"/>
+                                    <apex:column value="{!sdbl.UnitPrice}"/>
+                                    <apex:column value="{!sdbl.Product2.Description}"/>
+                                </apex:pageBlockTable>
+                            </div>
+                        </apex:pageBlock>
+                    </apex:pageBlock>
+                </apex:tab>
+                
+            </apex:tabPanel>
+            
+        </apex:pageBlock>
+        
+    </apex:form>
+    
+</apex:page>
